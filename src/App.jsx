@@ -5,6 +5,7 @@ import HedgeTable from './components/HedgeTable';
 import AddPositionModal from './components/AddPositionModal';
 import PayoffChart from './components/PayoffChart';
 import BottomNav from './components/BottomNav';
+import TransactionHistory from './components/TransactionHistory';
 import { calculatePositionPL } from './utils/calculations';
 
 // LocalStorage 鍵名
@@ -49,26 +50,10 @@ function App() {
     });
 
     // 避險部位
-    const [positions, setPositions] = useState([
-        {
-            id: 'demo-1',
-            type: 'option',
-            side: 'buy',
-            callPut: 'put',
-            strike: 22000,
-            premium: 150,
-            multiplier: 50,
-            qty: 2
-        },
-        {
-            id: 'demo-2',
-            type: 'future',
-            side: 'sell',
-            price: 22500,
-            multiplier: 50,
-            qty: 1
-        }
-    ]);
+    const [positions, setPositions] = useState([]);
+
+    // 交易明細記錄
+    const [transactions, setTransactions] = useState([]);
 
     // 大盤指數
     const [marketIndex, setMarketIndex] = useState(22800);
@@ -83,27 +68,69 @@ function App() {
             if (saved.stock) setStock(saved.stock);
             if (saved.positions) setPositions(saved.positions);
             if (saved.marketIndex) setMarketIndex(saved.marketIndex);
+            if (saved.transactions) setTransactions(saved.transactions);
         }
     }, []);
 
     // 自動儲存
     useEffect(() => {
-        saveData({ stock, positions, marketIndex });
-    }, [stock, positions, marketIndex]);
+        saveData({ stock, positions, marketIndex, transactions });
+    }, [stock, positions, marketIndex, transactions]);
 
     // 計算總避險損益
     const totalHedgePL = useMemo(() => {
         return positions.reduce((acc, pos) => acc + calculatePositionPL(pos, marketIndex), 0);
     }, [positions, marketIndex]);
 
-    // 新增部位
+    // 新增部位（並記錄交易）
     const handleAddPosition = (newPosition) => {
         setPositions(prev => [...prev, newPosition]);
+
+        // 記錄交易明細
+        const transaction = {
+            id: `tx-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            action: 'open',
+            positionType: newPosition.type,
+            side: newPosition.side,
+            qty: newPosition.qty,
+            price: newPosition.type === 'option' ? newPosition.premium : newPosition.price,
+            // 選擇權額外資訊
+            callPut: newPosition.callPut,
+            strike: newPosition.strike,
+            // 關聯的部位 ID
+            positionId: newPosition.id
+        };
+        setTransactions(prev => [...prev, transaction]);
     };
 
-    // 移除部位
+    // 移除部位（並記錄平倉交易）
     const handleRemovePosition = (id) => {
+        const position = positions.find(p => p.id === id);
+        if (position) {
+            // 記錄平倉交易
+            const transaction = {
+                id: `tx-${Date.now()}`,
+                timestamp: new Date().toISOString(),
+                action: 'close',
+                positionType: position.type,
+                side: position.side,
+                qty: position.qty,
+                price: position.type === 'option' ? position.premium : position.price,
+                callPut: position.callPut,
+                strike: position.strike,
+                positionId: position.id
+            };
+            setTransactions(prev => [...prev, transaction]);
+        }
         setPositions(prev => prev.filter(p => p.id !== id));
+    };
+
+    // 清除所有交易記錄
+    const handleClearTransactions = () => {
+        if (window.confirm('確定要清除所有交易記錄嗎？')) {
+            setTransactions([]);
+        }
     };
 
     return (
@@ -125,6 +152,11 @@ function App() {
                         marketIndex={marketIndex}
                         onAddClick={() => setShowAddModal(true)}
                         onRemove={handleRemovePosition}
+                    />
+
+                    <TransactionHistory
+                        transactions={transactions}
+                        onClear={handleClearTransactions}
                     />
 
                     <PayoffChart
