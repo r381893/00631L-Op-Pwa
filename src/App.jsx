@@ -5,7 +5,6 @@ import HedgeTable from './components/HedgeTable';
 import AddPositionModal from './components/AddPositionModal';
 import PayoffChart from './components/PayoffChart';
 import BottomNav from './components/BottomNav';
-import TransactionHistory from './components/TransactionHistory';
 import PnLSimulationTable from './components/PnLSimulationTable';
 import { calculatePositionPL } from './utils/calculations';
 import { saveToFirebase, loadFromFirebase, subscribeToFirebase } from './utils/firebase';
@@ -255,11 +254,6 @@ function App() {
                         marketIndex={marketIndex}
                         onAddClick={() => setShowAddModal(true)}
                         onRemove={handleRemovePosition}
-                    />
-
-                    <TransactionHistory
-                        transactions={transactions}
-                        onClear={handleClearTransactions}
                     />
 
                     <PayoffChart
