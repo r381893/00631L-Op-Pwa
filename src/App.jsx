@@ -50,6 +50,12 @@ function App() {
         currentPrice: 245.5
     });
 
+    // 現金追蹤
+    const [cash, setCash] = useState({
+        initialCash: 0,      // 初始現金
+        currentCash: 0       // 目前現金
+    });
+
     // 避險部位
     const [positions, setPositions] = useState([]);
 
@@ -80,6 +86,7 @@ function App() {
 
             if (cloudData) {
                 if (cloudData.stock) setStock(cloudData.stock);
+                if (cloudData.cash) setCash(cloudData.cash);
                 if (cloudData.positions) setPositions(cloudData.positions);
                 if (cloudData.marketIndex) setMarketIndex(cloudData.marketIndex);
                 if (cloudData.transactions) setTransactions(cloudData.transactions);
@@ -91,6 +98,7 @@ function App() {
                 const localData = loadData();
                 if (localData) {
                     if (localData.stock) setStock(localData.stock);
+                    if (localData.cash) setCash(localData.cash);
                     if (localData.positions) setPositions(localData.positions);
                     if (localData.marketIndex) setMarketIndex(localData.marketIndex);
                     if (localData.transactions) setTransactions(localData.transactions);
@@ -108,6 +116,7 @@ function App() {
             if (!isSyncing.current && data) {
                 console.log('🔄 收到雲端更新');
                 if (data.stock) setStock(data.stock);
+                if (data.cash) setCash(data.cash);
                 if (data.positions) setPositions(data.positions);
                 if (data.marketIndex) setMarketIndex(data.marketIndex);
                 if (data.transactions) setTransactions(data.transactions);
@@ -143,9 +152,9 @@ function App() {
 
     // 資料變化時自動同步
     useEffect(() => {
-        const data = { stock, positions, marketIndex, transactions };
+        const data = { stock, cash, positions, marketIndex, transactions };
         syncData(data);
-    }, [stock, positions, marketIndex, transactions, syncData]);
+    }, [stock, cash, positions, marketIndex, transactions, syncData]);
 
     // 計算總避險損益
     const totalHedgePL = useMemo(() => {
@@ -209,6 +218,8 @@ function App() {
                     <StockCard
                         stock={stock}
                         onStockChange={setStock}
+                        cash={cash}
+                        onCashChange={setCash}
                         marketIndex={marketIndex}
                         onMarketIndexChange={setMarketIndex}
                         totalHedgePL={totalHedgePL}
