@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Shield, Plus, Trash2, Link } from 'lucide-react';
+import { Shield, Plus, Trash2, Link, Upload } from 'lucide-react';
 import { formatCurrency, getPLClass } from '../utils/formatters';
 import { calculatePositionPL } from '../utils/calculations';
 
@@ -63,9 +63,10 @@ function identifySpreads(positions) {
  * @param {Array} props.positions - 避險部位陣列
  * @param {number} props.marketIndex - 大盤指數
  * @param {Function} props.onAddClick - 新增按鈕點擊回調
+ * @param {Function} props.onQuickImportClick - 快速匯入按鈕點擊回調
  * @param {Function} props.onRemove - 移除部位回調
  */
-function HedgeTable({ positions, marketIndex, onAddClick, onRemove }) {
+function HedgeTable({ positions, marketIndex, onAddClick, onQuickImportClick, onRemove }) {
     // 識別複式單
     const { spreads, usedIds } = useMemo(() => identifySpreads(positions), [positions]);
 
@@ -88,9 +89,14 @@ function HedgeTable({ positions, marketIndex, onAddClick, onRemove }) {
                     <Shield size={20} style={{ color: 'var(--color-primary)' }} />
                     避險策略 (複式單/期貨)
                 </h2>
-                <button className="btn btn-primary" onClick={onAddClick}>
-                    <Plus size={16} /> 新增部位
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-secondary" onClick={onQuickImportClick}>
+                        <Upload size={16} /> 快速匯入
+                    </button>
+                    <button className="btn btn-primary" onClick={onAddClick}>
+                        <Plus size={16} /> 新增部位
+                    </button>
+                </div>
             </div>
 
             {/* 複式單圖例 */}

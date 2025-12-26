@@ -273,6 +273,7 @@ function App() {
                         positions={positions}
                         marketIndex={marketIndex}
                         onAddClick={() => setShowAddModal(true)}
+                        onQuickImportClick={() => setShowQuickImport(true)}
                         onRemove={handleRemovePosition}
                     />
 
