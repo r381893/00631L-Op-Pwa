@@ -103,7 +103,12 @@ function QuickImport({ isOpen, onClose, onImport }) {
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{
+                maxWidth: '500px',
+                maxHeight: '85vh',
+                display: 'flex',
+                flexDirection: 'column'
+            }}>
                 <div className="modal-header">
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Upload size={20} />
@@ -114,13 +119,13 @@ function QuickImport({ isOpen, onClose, onImport }) {
                     </button>
                 </div>
 
-                <div className="modal-body">
+                <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
                     <div style={{ marginBottom: '12px' }}>
                         <label className="input-label">貼上部位資料 (CSV 格式)</label>
                         <textarea
                             className="input"
                             style={{
-                                minHeight: '150px',
+                                minHeight: '100px',
                                 fontFamily: 'var(--font-mono)',
                                 fontSize: '0.75rem',
                                 resize: 'vertical'
