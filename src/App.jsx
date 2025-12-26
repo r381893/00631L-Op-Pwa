@@ -300,8 +300,14 @@ function App() {
             <QuickImport
                 isOpen={showQuickImport}
                 onClose={() => setShowQuickImport(false)}
-                onImport={(importedPositions) => {
-                    setPositions(prev => [...prev, ...importedPositions]);
+                onImport={(importedPositions, replaceMode) => {
+                    if (replaceMode) {
+                        // 覆蓋模式：清除舊部位
+                        setPositions(importedPositions);
+                    } else {
+                        // 新增模式：保留舊部位
+                        setPositions(prev => [...prev, ...importedPositions]);
+                    }
                 }}
             />
 

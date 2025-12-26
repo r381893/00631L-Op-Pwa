@@ -10,6 +10,7 @@ function QuickImport({ isOpen, onClose, onImport }) {
     const [inputText, setInputText] = useState('');
     const [parseResult, setParseResult] = useState(null);
     const [error, setError] = useState(null);
+    const [replaceMode, setReplaceMode] = useState(true); // 預設為覆蓋模式
 
     // 解析輸入的文字
     const parseInput = (text) => {
@@ -85,7 +86,7 @@ function QuickImport({ isOpen, onClose, onImport }) {
 
     const handleImport = () => {
         if (parseResult && parseResult.length > 0) {
-            onImport(parseResult);
+            onImport(parseResult, replaceMode);
             setInputText('');
             setParseResult(null);
             onClose();
@@ -144,6 +145,33 @@ option,sell,call,28600,64.25,4"
                         <strong>格式說明:</strong><br />
                         類型: option/future | 方向: buy/sell | Call/Put: call/put<br />
                         履約價: 數字 | 權利金: 數字 | 口數: 數字
+                    </div>
+
+                    {/* 匯入模式選擇 */}
+                    <div style={{
+                        display: 'flex',
+                        gap: '16px',
+                        marginBottom: '12px',
+                        fontSize: '0.8rem'
+                    }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                            <input
+                                type="radio"
+                                name="importMode"
+                                checked={replaceMode}
+                                onChange={() => setReplaceMode(true)}
+                            />
+                            <span>覆蓋（清除舊部位）</span>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                            <input
+                                type="radio"
+                                name="importMode"
+                                checked={!replaceMode}
+                                onChange={() => setReplaceMode(false)}
+                            />
+                            <span>新增（保留舊部位）</span>
+                        </label>
                     </div>
 
                     {/* 錯誤訊息 */}
