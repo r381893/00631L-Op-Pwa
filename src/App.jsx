@@ -155,13 +155,31 @@ function App() {
             setSyncStatus('error');
         }
 
-        isSyncing.current = false;
+        // 延遲重置 isSyncing 避免立即觸發監聽
+        setTimeout(() => {
+            isSyncing.current = false;
+        }, 500);
     }, []);
 
-    // 資料變化時自動同步
+    // 資料變化時自動同步（加入 debounce 防抖）
+    const syncTimeoutRef = useRef(null);
     useEffect(() => {
-        const data = { stock, cash, positions, marketIndex, transactions };
-        syncData(data);
+        // 清除之前的計時器
+        if (syncTimeoutRef.current) {
+            clearTimeout(syncTimeoutRef.current);
+        }
+
+        // 延遲 1 秒後同步，避免頻繁觸發
+        syncTimeoutRef.current = setTimeout(() => {
+            const data = { stock, cash, positions, marketIndex, transactions };
+            syncData(data);
+        }, 1000);
+
+        return () => {
+            if (syncTimeoutRef.current) {
+                clearTimeout(syncTimeoutRef.current);
+            }
+        };
     }, [stock, cash, positions, marketIndex, transactions, syncData]);
 
     // 標記本地編輯的 wrapper 函數
