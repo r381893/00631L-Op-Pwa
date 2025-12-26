@@ -1,7 +1,8 @@
-import React from 'react';
-import { TrendingUp, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { TrendingUp, RefreshCw, Loader, AlertCircle } from 'lucide-react';
 import { formatCurrency, formatPercent, getPLClass } from '../utils/formatters';
 import { calculateStockPL, calculateStockReturn } from '../utils/calculations';
+import { fetchAllPrices } from '../utils/api';
 
 /**
  * 00631L 持股管理卡片
@@ -13,6 +14,10 @@ import { calculateStockPL, calculateStockReturn } from '../utils/calculations';
  * @param {number} props.totalHedgePL - 避險部位總損益
  */
 function StockCard({ stock, onStockChange, marketIndex, onMarketIndexChange, totalHedgePL }) {
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [lastUpdate, setLastUpdate] = useState(null);
+
     const stockPL = calculateStockPL(stock);
     const stockReturn = calculateStockReturn(stock);
     const netPL = stockPL + totalHedgePL;
@@ -20,6 +25,33 @@ function StockCard({ stock, onStockChange, marketIndex, onMarketIndexChange, tot
     const handleChange = (field, value) => {
         const numValue = parseFloat(value) || 0;
         onStockChange({ ...stock, [field]: numValue });
+    };
+
+    // Yahoo Finance 同步功能
+    const handleYahooSync = async () => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const data = await fetchAllPrices();
+
+            // 更新股價
+            if (data.stock && data.stock.price) {
+                onStockChange({ ...stock, currentPrice: data.stock.price });
+            }
+
+            // 更新大盤指數
+            if (data.taiex && data.taiex.price) {
+                onMarketIndexChange(data.taiex.price);
+            }
+
+            setLastUpdate(new Date().toLocaleTimeString('zh-TW'));
+        } catch (err) {
+            console.error('Yahoo sync error:', err);
+            setError('同步失敗，請確認後端服務是否運作中');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -58,10 +90,45 @@ function StockCard({ stock, onStockChange, marketIndex, onMarketIndexChange, tot
                         <TrendingUp size={20} style={{ color: 'var(--color-profit)' }} />
                         持股設定 (00631L)
                     </h2>
-                    <button className="btn btn-secondary" style={{ fontSize: '0.75rem' }}>
-                        <RefreshCw size={12} /> Yahoo同步
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {lastUpdate && (
+                            <span style={{ fontSize: '0.625rem', color: 'var(--text-muted)' }}>
+                                更新: {lastUpdate}
+                            </span>
+                        )}
+                        <button
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.75rem' }}
+                            onClick={handleYahooSync}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <Loader size={12} className="spin" />
+                            ) : (
+                                <RefreshCw size={12} />
+                            )}
+                            {isLoading ? '同步中...' : 'Yahoo同步'}
+                        </button>
+                    </div>
                 </div>
+
+                {/* 錯誤訊息 */}
+                {error && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        marginBottom: '16px',
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        borderRadius: '8px',
+                        fontSize: '0.75rem',
+                        color: 'var(--color-danger)'
+                    }}>
+                        <AlertCircle size={14} />
+                        {error}
+                    </div>
+                )}
 
                 <div className="grid grid-4 grid-2-mobile">
                     <div>
@@ -84,7 +151,7 @@ function StockCard({ stock, onStockChange, marketIndex, onMarketIndexChange, tot
                         />
                     </div>
                     <div>
-                        <label className="input-label">目前市價 (模擬)</label>
+                        <label className="input-label">目前市價</label>
                         <input
                             type="number"
                             className="input input-highlight"
@@ -94,7 +161,7 @@ function StockCard({ stock, onStockChange, marketIndex, onMarketIndexChange, tot
                         />
                     </div>
                     <div>
-                        <label className="input-label">參考大盤指數</label>
+                        <label className="input-label">加權指數</label>
                         <input
                             type="number"
                             className="input"
