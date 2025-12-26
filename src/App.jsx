@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import Header from './components/Header';
 import StockCard from './components/StockCard';
 import HedgeTable from './components/HedgeTable';
@@ -7,8 +7,9 @@ import PayoffChart from './components/PayoffChart';
 import BottomNav from './components/BottomNav';
 import TransactionHistory from './components/TransactionHistory';
 import { calculatePositionPL } from './utils/calculations';
+import { saveToFirebase, loadFromFirebase, subscribeToFirebase } from './utils/firebase';
 
-// LocalStorage 鍵名
+// LocalStorage 鍵名 (作為離線備份)
 const STORAGE_KEY = '00631l-hedge-data';
 
 /**
@@ -61,21 +62,90 @@ function App() {
     // Modal 狀態
     const [showAddModal, setShowAddModal] = useState(false);
 
-    // 載入儲存的資料
+    // 同步狀態
+    const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, synced, error
+    const [lastSyncTime, setLastSyncTime] = useState(null);
+
+    // 防止重複同步
+    const isInitialLoad = useRef(true);
+    const isSyncing = useRef(false);
+
+    // 從 Firebase 載入資料
     useEffect(() => {
-        const saved = loadData();
-        if (saved) {
-            if (saved.stock) setStock(saved.stock);
-            if (saved.positions) setPositions(saved.positions);
-            if (saved.marketIndex) setMarketIndex(saved.marketIndex);
-            if (saved.transactions) setTransactions(saved.transactions);
+        async function initData() {
+            setSyncStatus('syncing');
+
+            // 先嘗試從 Firebase 載入
+            const cloudData = await loadFromFirebase();
+
+            if (cloudData) {
+                if (cloudData.stock) setStock(cloudData.stock);
+                if (cloudData.positions) setPositions(cloudData.positions);
+                if (cloudData.marketIndex) setMarketIndex(cloudData.marketIndex);
+                if (cloudData.transactions) setTransactions(cloudData.transactions);
+                setSyncStatus('synced');
+                setLastSyncTime(new Date().toLocaleTimeString('zh-TW'));
+                console.log('✅ 從雲端載入資料');
+            } else {
+                // 如果雲端沒資料，從 LocalStorage 載入
+                const localData = loadData();
+                if (localData) {
+                    if (localData.stock) setStock(localData.stock);
+                    if (localData.positions) setPositions(localData.positions);
+                    if (localData.marketIndex) setMarketIndex(localData.marketIndex);
+                    if (localData.transactions) setTransactions(localData.transactions);
+                }
+                setSyncStatus('idle');
+            }
+
+            isInitialLoad.current = false;
         }
+
+        initData();
+
+        // 監聽 Firebase 即時更新
+        const unsubscribe = subscribeToFirebase((data) => {
+            if (!isSyncing.current && data) {
+                console.log('🔄 收到雲端更新');
+                if (data.stock) setStock(data.stock);
+                if (data.positions) setPositions(data.positions);
+                if (data.marketIndex) setMarketIndex(data.marketIndex);
+                if (data.transactions) setTransactions(data.transactions);
+                setLastSyncTime(new Date().toLocaleTimeString('zh-TW'));
+            }
+        });
+
+        return () => unsubscribe();
     }, []);
 
-    // 自動儲存
+    // 同步資料到 Firebase 和 LocalStorage
+    const syncData = useCallback(async (data) => {
+        if (isInitialLoad.current) return;
+
+        isSyncing.current = true;
+        setSyncStatus('syncing');
+
+        // 儲存到 LocalStorage (離線備份)
+        saveData(data);
+
+        // 同步到 Firebase
+        const success = await saveToFirebase(data);
+
+        if (success) {
+            setSyncStatus('synced');
+            setLastSyncTime(new Date().toLocaleTimeString('zh-TW'));
+        } else {
+            setSyncStatus('error');
+        }
+
+        isSyncing.current = false;
+    }, []);
+
+    // 資料變化時自動同步
     useEffect(() => {
-        saveData({ stock, positions, marketIndex, transactions });
-    }, [stock, positions, marketIndex, transactions]);
+        const data = { stock, positions, marketIndex, transactions };
+        syncData(data);
+    }, [stock, positions, marketIndex, transactions, syncData]);
 
     // 計算總避險損益
     const totalHedgePL = useMemo(() => {
@@ -95,10 +165,8 @@ function App() {
             side: newPosition.side,
             qty: newPosition.qty,
             price: newPosition.type === 'option' ? newPosition.premium : newPosition.price,
-            // 選擇權額外資訊
             callPut: newPosition.callPut,
             strike: newPosition.strike,
-            // 關聯的部位 ID
             positionId: newPosition.id
         };
         setTransactions(prev => [...prev, transaction]);
@@ -108,7 +176,6 @@ function App() {
     const handleRemovePosition = (id) => {
         const position = positions.find(p => p.id === id);
         if (position) {
-            // 記錄平倉交易
             const transaction = {
                 id: `tx-${Date.now()}`,
                 timestamp: new Date().toISOString(),
@@ -135,7 +202,7 @@ function App() {
 
     return (
         <div className="app">
-            <Header />
+            <Header syncStatus={syncStatus} lastSyncTime={lastSyncTime} />
 
             <main className="main-content">
                 <div className="container" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '16px' }}>
