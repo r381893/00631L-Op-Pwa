@@ -76,6 +76,10 @@ function App() {
     const isInitialLoad = useRef(true);
     const isSyncing = useRef(false);
 
+    // 輸入保護：記錄最後一次本地編輯時間
+    const lastLocalChange = useRef(0);
+    const LOCAL_EDIT_GRACE_PERIOD = 3000; // 3 秒內不接受雲端更新
+
     // 從 Firebase 載入資料
     useEffect(() => {
         async function initData() {
@@ -113,7 +117,9 @@ function App() {
 
         // 監聽 Firebase 即時更新
         const unsubscribe = subscribeToFirebase((data) => {
-            if (!isSyncing.current && data) {
+            // 如果正在同步或最近剛在本地編輯，不要接收雲端更新
+            const timeSinceLastEdit = Date.now() - lastLocalChange.current;
+            if (!isSyncing.current && data && timeSinceLastEdit > LOCAL_EDIT_GRACE_PERIOD) {
                 console.log('🔄 收到雲端更新');
                 if (data.stock) setStock(data.stock);
                 if (data.cash) setCash(data.cash);
@@ -121,6 +127,8 @@ function App() {
                 if (data.marketIndex) setMarketIndex(data.marketIndex);
                 if (data.transactions) setTransactions(data.transactions);
                 setLastSyncTime(new Date().toLocaleTimeString('zh-TW'));
+            } else if (timeSinceLastEdit <= LOCAL_EDIT_GRACE_PERIOD) {
+                console.log('⏸️ 忽略雲端更新（正在輸入中）');
             }
         });
 
@@ -155,6 +163,22 @@ function App() {
         const data = { stock, cash, positions, marketIndex, transactions };
         syncData(data);
     }, [stock, cash, positions, marketIndex, transactions, syncData]);
+
+    // 標記本地編輯的 wrapper 函數
+    const handleLocalStockChange = (newStock) => {
+        lastLocalChange.current = Date.now();
+        setStock(newStock);
+    };
+
+    const handleLocalCashChange = (newCash) => {
+        lastLocalChange.current = Date.now();
+        setCash(newCash);
+    };
+
+    const handleLocalMarketIndexChange = (newIndex) => {
+        lastLocalChange.current = Date.now();
+        setMarketIndex(newIndex);
+    };
 
     // 計算總避險損益
     const totalHedgePL = useMemo(() => {
@@ -217,11 +241,11 @@ function App() {
                 <div className="container" style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '16px' }}>
                     <StockCard
                         stock={stock}
-                        onStockChange={setStock}
+                        onStockChange={handleLocalStockChange}
                         cash={cash}
-                        onCashChange={setCash}
+                        onCashChange={handleLocalCashChange}
                         marketIndex={marketIndex}
-                        onMarketIndexChange={setMarketIndex}
+                        onMarketIndexChange={handleLocalMarketIndexChange}
                         totalHedgePL={totalHedgePL}
                     />
 
