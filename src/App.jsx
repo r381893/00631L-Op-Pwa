@@ -6,6 +6,7 @@ import AddPositionModal from './components/AddPositionModal';
 import PayoffChart from './components/PayoffChart';
 import BottomNav from './components/BottomNav';
 import PnLSimulationTable from './components/PnLSimulationTable';
+import QuickImport from './components/QuickImport';
 import { calculatePositionPL } from './utils/calculations';
 import { saveToFirebase, loadFromFirebase, subscribeToFirebase } from './utils/firebase';
 
@@ -67,6 +68,7 @@ function App() {
 
     // Modal 狀態
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showQuickImport, setShowQuickImport] = useState(false);
 
     // 同步狀態
     const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, synced, error
@@ -294,7 +296,18 @@ function App() {
                 onAdd={handleAddPosition}
             />
 
-            <BottomNav onAddClick={() => setShowAddModal(true)} />
+            <QuickImport
+                isOpen={showQuickImport}
+                onClose={() => setShowQuickImport(false)}
+                onImport={(importedPositions) => {
+                    setPositions(prev => [...prev, ...importedPositions]);
+                }}
+            />
+
+            <BottomNav
+                onAddClick={() => setShowAddModal(true)}
+                onQuickImportClick={() => setShowQuickImport(true)}
+            />
         </div>
     );
 }
