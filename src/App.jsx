@@ -6,6 +6,7 @@ import AddPositionModal from './components/AddPositionModal';
 import PayoffChart from './components/PayoffChart';
 import BottomNav from './components/BottomNav';
 import TransactionHistory from './components/TransactionHistory';
+import PnLSimulationTable from './components/PnLSimulationTable';
 import { calculatePositionPL } from './utils/calculations';
 import { saveToFirebase, loadFromFirebase, subscribeToFirebase } from './utils/firebase';
 
@@ -262,6 +263,12 @@ function App() {
                     />
 
                     <PayoffChart
+                        stock={stock}
+                        positions={positions}
+                        marketIndex={marketIndex}
+                    />
+
+                    <PnLSimulationTable
                         stock={stock}
                         positions={positions}
                         marketIndex={marketIndex}
