@@ -1,8 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X, Check, AlertCircle, Image, FileText, Loader } from 'lucide-react';
-
-// API 端點
-const API_BASE = 'https://zero0631l-hedge-api.onrender.com';
+import { performOCR, parseToCSV } from '../utils/ocrUtils';
 
 /**
  * 快速匯入部位功能
@@ -145,41 +143,40 @@ function QuickImport({ isOpen, onClose, onImport }) {
         reader.readAsDataURL(file);
     };
 
+    const [ocrProgress, setOcrProgress] = useState(0);
+
     const handleOcrProcess = async () => {
         if (!imagePreview) return;
 
         setIsProcessing(true);
         setError(null);
+        setOcrProgress(0);
 
         try {
-            const response = await fetch(`${API_BASE}/api/ocr-image`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ image: imagePreview })
+            // 使用 Tesseract.js 進行本地 OCR
+            const rawText = await performOCR(imagePreview, (progress) => {
+                setOcrProgress(progress);
             });
 
-            const data = await response.json();
+            if (rawText.trim()) {
+                // 嘗試自動轉換成 CSV 格式
+                const csvText = parseToCSV(rawText);
 
-            if (!response.ok) {
-                throw new Error(data.message || '辨識失敗');
-            }
-
-            if (data.success && data.csv) {
-                // 清理 CSV 文字（移除可能的 markdown code block）
-                let cleanCsv = data.csv;
-                cleanCsv = cleanCsv.replace(/```csv\n?/g, '').replace(/```\n?/g, '');
+                // 如果自動轉換沒有結果，就顯示原始文字讓使用者手動編輯
+                const resultText = csvText.split('\n').length > 1 ? csvText : rawText;
 
                 // 切換到文字 Tab 並填入辨識結果
                 setActiveTab('text');
-                setInputText(cleanCsv);
-                parseInput(cleanCsv);
+                setInputText(resultText);
+                parseInput(resultText);
+            } else {
+                setError('無法辨識圖片中的文字，請確認圖片清晰度');
             }
         } catch (err) {
             setError(`OCR 辨識錯誤: ${err.message}`);
         } finally {
             setIsProcessing(false);
+            setOcrProgress(0);
         }
     };
 
@@ -377,17 +374,28 @@ option,sell,call,28600,64.25,4"
                                         className="btn btn-primary"
                                         onClick={handleOcrProcess}
                                         disabled={isProcessing}
-                                        style={{ width: '100%' }}
+                                        style={{ width: '100%', position: 'relative', overflow: 'hidden' }}
                                     >
+                                        {isProcessing && ocrProgress > 0 && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                left: 0,
+                                                top: 0,
+                                                height: '100%',
+                                                width: `${ocrProgress}%`,
+                                                background: 'rgba(255,255,255,0.2)',
+                                                transition: 'width 0.3s'
+                                            }} />
+                                        )}
                                         {isProcessing ? (
                                             <>
                                                 <Loader size={16} className="spin" />
-                                                辨識中...
+                                                辨識中... {ocrProgress > 0 ? `${ocrProgress}%` : '載入中'}
                                             </>
                                         ) : (
                                             <>
                                                 <Image size={16} />
-                                                辨識圖片
+                                                辨識圖片 (本機處理)
                                             </>
                                         )}
                                     </button>
