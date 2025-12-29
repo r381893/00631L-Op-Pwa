@@ -1,16 +1,26 @@
-import React, { useState } from 'react';
-import { Upload, X, Check, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Upload, X, Check, AlertCircle, Image, FileText, Loader } from 'lucide-react';
+
+// API 端點
+const API_BASE = 'https://zero0631l-hedge-api.onrender.com';
 
 /**
  * 快速匯入部位功能
- * 支援 CSV 格式的文字貼上
+ * 支援 CSV 格式的文字貼上和圖片 OCR 辨識
  * 格式: 類型,方向,Call/Put,履約價,權利金,口數
  */
 function QuickImport({ isOpen, onClose, onImport }) {
+    const [activeTab, setActiveTab] = useState('text'); // 'text' or 'image'
     const [inputText, setInputText] = useState('');
     const [parseResult, setParseResult] = useState(null);
     const [error, setError] = useState(null);
-    const [replaceMode, setReplaceMode] = useState(true); // 預設為覆蓋模式
+    const [replaceMode, setReplaceMode] = useState(true);
+
+    // 圖片上傳相關
+    const [selectedImage, setSelectedImage] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const fileInputRef = useRef(null);
 
     // 解析輸入的文字
     const parseInput = (text) => {
@@ -89,6 +99,8 @@ function QuickImport({ isOpen, onClose, onImport }) {
             onImport(parseResult, replaceMode);
             setInputText('');
             setParseResult(null);
+            setSelectedImage(null);
+            setImagePreview(null);
             onClose();
         }
     };
@@ -97,6 +109,78 @@ function QuickImport({ isOpen, onClose, onImport }) {
         setInputText('');
         setParseResult(null);
         setError(null);
+        setSelectedImage(null);
+        setImagePreview(null);
+    };
+
+    // 圖片處理相關函數
+    const handleFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            processFile(file);
+        }
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            processFile(file);
+        }
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+    };
+
+    const processFile = (file) => {
+        setSelectedImage(file);
+        setError(null);
+
+        // 建立預覽
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setImagePreview(e.target.result);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleOcrProcess = async () => {
+        if (!imagePreview) return;
+
+        setIsProcessing(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`${API_BASE}/api/ocr-image`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: imagePreview })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || '辨識失敗');
+            }
+
+            if (data.success && data.csv) {
+                // 清理 CSV 文字（移除可能的 markdown code block）
+                let cleanCsv = data.csv;
+                cleanCsv = cleanCsv.replace(/```csv\n?/g, '').replace(/```\n?/g, '');
+
+                // 切換到文字 Tab 並填入辨識結果
+                setActiveTab('text');
+                setInputText(cleanCsv);
+                parseInput(cleanCsv);
+            }
+        } catch (err) {
+            setError(`OCR 辨識錯誤: ${err.message}`);
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -119,38 +203,214 @@ function QuickImport({ isOpen, onClose, onImport }) {
                     </button>
                 </div>
 
+                {/* Tab 切換 */}
+                <div style={{
+                    display: 'flex',
+                    borderBottom: '1px solid var(--border-color)',
+                    padding: '0 16px'
+                }}>
+                    <button
+                        onClick={() => setActiveTab('text')}
+                        style={{
+                            flex: 1,
+                            padding: '12px',
+                            background: 'transparent',
+                            border: 'none',
+                            borderBottom: activeTab === 'text' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                            color: activeTab === 'text' ? 'var(--color-primary)' : 'var(--text-muted)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            fontSize: '0.875rem',
+                            fontWeight: activeTab === 'text' ? 600 : 400,
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <FileText size={16} />
+                        貼上文字
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('image')}
+                        style={{
+                            flex: 1,
+                            padding: '12px',
+                            background: 'transparent',
+                            border: 'none',
+                            borderBottom: activeTab === 'image' ? '2px solid var(--color-primary)' : '2px solid transparent',
+                            color: activeTab === 'image' ? 'var(--color-primary)' : 'var(--text-muted)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            fontSize: '0.875rem',
+                            fontWeight: activeTab === 'image' ? 600 : 400,
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <Image size={16} />
+                        上傳圖片
+                    </button>
+                </div>
+
                 <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
-                    <div style={{ marginBottom: '12px' }}>
-                        <label className="input-label">貼上部位資料 (CSV 格式)</label>
-                        <textarea
-                            className="input"
-                            style={{
-                                minHeight: '100px',
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: '0.75rem',
-                                resize: 'vertical'
-                            }}
-                            placeholder="類型,方向,Call/Put,履約價,權利金,口數
+                    {/* 文字輸入 Tab */}
+                    {activeTab === 'text' && (
+                        <>
+                            <div style={{ marginBottom: '12px' }}>
+                                <label className="input-label">貼上部位資料 (CSV 格式)</label>
+                                <textarea
+                                    className="input"
+                                    style={{
+                                        minHeight: '100px',
+                                        fontFamily: 'var(--font-mono)',
+                                        fontSize: '0.75rem',
+                                        resize: 'vertical'
+                                    }}
+                                    placeholder="類型,方向,Call/Put,履約價,權利金,口數
 option,buy,put,27900,45.5,2
 option,sell,call,28600,64.25,4"
-                            value={inputText}
-                            onChange={handleTextChange}
-                        />
-                    </div>
+                                    value={inputText}
+                                    onChange={handleTextChange}
+                                />
+                            </div>
 
-                    {/* 格式說明 */}
-                    <div style={{
-                        padding: '8px',
-                        background: 'var(--bg-tertiary)',
-                        borderRadius: '8px',
-                        fontSize: '0.7rem',
-                        color: 'var(--text-muted)',
-                        marginBottom: '12px'
-                    }}>
-                        <strong>格式說明:</strong><br />
-                        類型: option/future | 方向: buy/sell | Call/Put: call/put<br />
-                        履約價: 數字 | 權利金: 數字 | 口數: 數字
-                    </div>
+                            {/* 格式說明 */}
+                            <div style={{
+                                padding: '8px',
+                                background: 'var(--bg-tertiary)',
+                                borderRadius: '8px',
+                                fontSize: '0.7rem',
+                                color: 'var(--text-muted)',
+                                marginBottom: '12px'
+                            }}>
+                                <strong>格式說明:</strong><br />
+                                類型: option/future | 方向: buy/sell | Call/Put: call/put<br />
+                                履約價: 數字 | 權利金: 數字 | 口數: 數字
+                            </div>
+                        </>
+                    )}
+
+                    {/* 圖片上傳 Tab */}
+                    {activeTab === 'image' && (
+                        <>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                accept="image/*"
+                                onChange={handleFileSelect}
+                                style={{ display: 'none' }}
+                            />
+
+                            {/* 拖放區域 */}
+                            {!imagePreview ? (
+                                <div
+                                    onClick={() => fileInputRef.current?.click()}
+                                    onDrop={handleDrop}
+                                    onDragOver={handleDragOver}
+                                    style={{
+                                        border: '2px dashed var(--border-color)',
+                                        borderRadius: '12px',
+                                        padding: '32px',
+                                        textAlign: 'center',
+                                        cursor: 'pointer',
+                                        marginBottom: '12px',
+                                        background: 'var(--bg-tertiary)',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <Image size={48} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
+                                    <p style={{ color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                        點擊或拖放圖片到這裡
+                                    </p>
+                                    <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                        支援 PNG, JPG, JPEG 格式
+                                    </p>
+                                </div>
+                            ) : (
+                                /* 圖片預覽 */
+                                <div style={{ marginBottom: '12px' }}>
+                                    <div style={{
+                                        position: 'relative',
+                                        borderRadius: '8px',
+                                        overflow: 'hidden',
+                                        marginBottom: '12px'
+                                    }}>
+                                        <img
+                                            src={imagePreview}
+                                            alt="預覽"
+                                            style={{
+                                                width: '100%',
+                                                maxHeight: '200px',
+                                                objectFit: 'contain',
+                                                background: 'var(--bg-tertiary)'
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                setSelectedImage(null);
+                                                setImagePreview(null);
+                                            }}
+                                            style={{
+                                                position: 'absolute',
+                                                top: '8px',
+                                                right: '8px',
+                                                background: 'rgba(0,0,0,0.6)',
+                                                border: 'none',
+                                                borderRadius: '50%',
+                                                width: '28px',
+                                                height: '28px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer',
+                                                color: 'white'
+                                            }}
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleOcrProcess}
+                                        disabled={isProcessing}
+                                        style={{ width: '100%' }}
+                                    >
+                                        {isProcessing ? (
+                                            <>
+                                                <Loader size={16} className="spin" />
+                                                辨識中...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Image size={16} />
+                                                辨識圖片
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* 使用說明 */}
+                            <div style={{
+                                padding: '8px',
+                                background: 'var(--bg-tertiary)',
+                                borderRadius: '8px',
+                                fontSize: '0.7rem',
+                                color: 'var(--text-muted)',
+                                marginBottom: '12px'
+                            }}>
+                                <strong>使用說明:</strong><br />
+                                1. 上傳交易部位的截圖<br />
+                                2. 點擊「辨識圖片」按鈕<br />
+                                3. AI 會自動辨識並轉換成 CSV 格式<br />
+                                4. 確認無誤後點擊「匯入」
+                            </div>
+                        </>
+                    )}
 
                     {/* 匯入模式選擇 */}
                     <div style={{
