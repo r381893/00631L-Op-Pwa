@@ -173,7 +173,7 @@ app.post('/api/ocr-image', async (req, res) => {
         // 移除 data URL prefix (如果有的話)
         const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
         const prompt = `請辨識這張圖片中的交易部位資料，並轉換成 CSV 格式。
 
