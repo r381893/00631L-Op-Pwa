@@ -7,6 +7,7 @@ import PayoffChart from './components/PayoffChart';
 import BottomNav from './components/BottomNav';
 import PnLSimulationTable from './components/PnLSimulationTable';
 import QuickImport from './components/QuickImport';
+import DailyPnLTracker from './components/DailyPnLTracker';
 import { calculatePositionPL } from './utils/calculations';
 import { saveToFirebase, loadFromFirebase, subscribeToFirebase } from './utils/firebase';
 
@@ -63,6 +64,9 @@ function App() {
     // 交易明細記錄
     const [transactions, setTransactions] = useState([]);
 
+    // 每日損益記錄
+    const [dailyRecords, setDailyRecords] = useState([]);
+
     // 大盤指數
     const [marketIndex, setMarketIndex] = useState(22800);
 
@@ -96,6 +100,7 @@ function App() {
                 if (cloudData.positions) setPositions(cloudData.positions);
                 if (cloudData.marketIndex) setMarketIndex(cloudData.marketIndex);
                 if (cloudData.transactions) setTransactions(cloudData.transactions);
+                if (cloudData.dailyRecords) setDailyRecords(cloudData.dailyRecords);
                 setSyncStatus('synced');
                 setLastSyncTime(new Date().toLocaleTimeString('zh-TW'));
                 console.log('✅ 從雲端載入資料');
@@ -108,6 +113,7 @@ function App() {
                     if (localData.positions) setPositions(localData.positions);
                     if (localData.marketIndex) setMarketIndex(localData.marketIndex);
                     if (localData.transactions) setTransactions(localData.transactions);
+                    if (localData.dailyRecords) setDailyRecords(localData.dailyRecords);
                 }
                 setSyncStatus('idle');
             }
@@ -128,6 +134,7 @@ function App() {
                 if (data.positions) setPositions(data.positions);
                 if (data.marketIndex) setMarketIndex(data.marketIndex);
                 if (data.transactions) setTransactions(data.transactions);
+                if (data.dailyRecords) setDailyRecords(data.dailyRecords);
                 setLastSyncTime(new Date().toLocaleTimeString('zh-TW'));
             } else if (timeSinceLastEdit <= LOCAL_EDIT_GRACE_PERIOD) {
                 console.log('⏸️ 忽略雲端更新（正在輸入中）');
@@ -173,7 +180,7 @@ function App() {
 
         // 延遲 1 秒後同步，避免頻繁觸發
         syncTimeoutRef.current = setTimeout(() => {
-            const data = { stock, cash, positions, marketIndex, transactions };
+            const data = { stock, cash, positions, marketIndex, transactions, dailyRecords };
             syncData(data);
         }, 1000);
 
@@ -182,7 +189,7 @@ function App() {
                 clearTimeout(syncTimeoutRef.current);
             }
         };
-    }, [stock, cash, positions, marketIndex, transactions, syncData]);
+    }, [stock, cash, positions, marketIndex, transactions, dailyRecords, syncData]);
 
     // 標記本地編輯的 wrapper 函數
     const handleLocalStockChange = (newStock) => {
@@ -204,6 +211,63 @@ function App() {
     const totalHedgePL = useMemo(() => {
         return positions.reduce((acc, pos) => acc + calculatePositionPL(pos, marketIndex), 0);
     }, [positions, marketIndex]);
+
+    // 計算整體損益（股票 + 現金 + 避險）
+    const totalPL = useMemo(() => {
+        const stockPL = (stock.currentPrice - stock.avgCost) * stock.shares;
+        const cashPL = (cash?.currentCash || 0) - (cash?.initialCash || 0);
+        return stockPL + cashPL + totalHedgePL;
+    }, [stock, cash, totalHedgePL]);
+
+    // 計算總成本
+    const totalCost = useMemo(() => {
+        return (stock.shares * stock.avgCost) + (cash?.initialCash || 0);
+    }, [stock, cash]);
+
+    // 計算整體報酬率
+    const totalReturn = useMemo(() => {
+        return totalCost > 0 ? totalPL / totalCost : 0;
+    }, [totalPL, totalCost]);
+
+    // 每日損益追蹤邏輯
+    useEffect(() => {
+        if (isInitialLoad.current) return;
+
+        const today = new Date().toISOString().slice(0, 10);
+        const todayRecord = dailyRecords.find(r => r.date === today);
+
+        // 如果今天沒有記錄，或者當前損益大於已記錄的最大值，則更新
+        if (!todayRecord || totalPL > todayRecord.maxPL) {
+            const newRecord = {
+                date: today,
+                maxPL: totalPL,
+                maxReturn: totalReturn,
+                marketIndex: marketIndex,
+                totalCost: totalCost,
+                updatedAt: new Date().toISOString()
+            };
+
+            setDailyRecords(prev => {
+                const filtered = prev.filter(r => r.date !== today);
+                return [...filtered, newRecord].sort((a, b) => a.date.localeCompare(b.date));
+            });
+            console.log('📊 更新每日損益記錄:', newRecord);
+        }
+    }, [totalPL, totalReturn, marketIndex, totalCost, dailyRecords]);
+
+    // 清除每日記錄
+    const handleClearDailyRecords = () => {
+        if (window.confirm('確定要清除所有每日損益記錄嗎？此操作無法復原。')) {
+            setDailyRecords([]);
+        }
+    };
+
+    // 刪除單筆每日記錄
+    const handleDeleteDailyRecord = (date) => {
+        if (window.confirm(`確定要刪除 ${date} 的記錄嗎？`)) {
+            setDailyRecords(prev => prev.filter(r => r.date !== date));
+        }
+    };
 
     // 新增部位（並記錄交易）
     const handleAddPosition = (newPosition) => {
@@ -287,6 +351,14 @@ function App() {
                         stock={stock}
                         positions={positions}
                         marketIndex={marketIndex}
+                    />
+
+                    <DailyPnLTracker
+                        dailyRecords={dailyRecords}
+                        currentPL={totalPL}
+                        currentReturn={totalReturn}
+                        onClearRecords={handleClearDailyRecords}
+                        onDeleteRecord={handleDeleteDailyRecord}
                     />
                 </div>
             </main>
