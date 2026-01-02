@@ -14,12 +14,17 @@ const SPREAD_COLORS = [
 
 /**
  * 自動識別複式單（價差組合）
- * 規則：同類型(call/put)、相鄰履約價、一買一賣、口數相同
+ * 規則：同類型(call/put)、一買一賣、口數相同
  */
 function identifySpreads(positions) {
     const optionPositions = positions.filter(p => p.type === 'option');
     const spreads = [];
     const usedIds = new Set();
+
+    console.log('🔍 複式單識別開始，選擇權部位數量:', optionPositions.length);
+    optionPositions.forEach(p => {
+        console.log(`  - ${p.callPut} @ ${p.strike}, ${p.side}, ${p.qty}口`);
+    });
 
     // 按履約價排序
     const sortedOptions = [...optionPositions].sort((a, b) => a.strike - b.strike);
@@ -33,13 +38,16 @@ function identifySpreads(positions) {
             const pos2 = sortedOptions[j];
             if (usedIds.has(pos2.id)) continue;
 
-            // 檢查是否為複式單
+            // 檢查是否為複式單（移除履約價差距限制）
             const isSameType = pos1.callPut === pos2.callPut;
             const isOppositeSide = pos1.side !== pos2.side;
             const isSameQty = pos1.qty === pos2.qty;
-            const isAdjacentStrike = Math.abs(pos1.strike - pos2.strike) <= 500; // 500 點內視為相鄰
 
-            if (isSameType && isOppositeSide && isSameQty && isAdjacentStrike) {
+            console.log(`  配對檢查: ${pos1.callPut}@${pos1.strike} vs ${pos2.callPut}@${pos2.strike}`);
+            console.log(`    同類型:${isSameType}, 一買一賣:${isOppositeSide}, 同口數:${isSameQty}`);
+
+            if (isSameType && isOppositeSide && isSameQty) {
+                console.log(`  ✅ 找到複式單: ${pos1.callPut} ${pos1.strike}/${pos2.strike}`);
                 spreads.push({
                     id: `spread-${pos1.id}-${pos2.id}`,
                     positions: [pos1.id, pos2.id],
@@ -54,6 +62,7 @@ function identifySpreads(positions) {
         }
     }
 
+    console.log('🔍 複式單識別結束，找到:', spreads.length, '個');
     return { spreads, usedIds };
 }
 
