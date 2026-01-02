@@ -37,7 +37,7 @@ function identifySpreads(positions) {
             const isSameType = pos1.callPut === pos2.callPut;
             const isOppositeSide = pos1.side !== pos2.side;
             const isSameQty = pos1.qty === pos2.qty;
-            const isAdjacentStrike = Math.abs(pos1.strike - pos2.strike) <= 200; // 200 點內視為相鄰
+            const isAdjacentStrike = Math.abs(pos1.strike - pos2.strike) <= 500; // 500 點內視為相鄰
 
             if (isSameType && isOppositeSide && isSameQty && isAdjacentStrike) {
                 spreads.push({
